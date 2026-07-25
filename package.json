@@ -1,0 +1,21 @@
+{
+  "name": "streampay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Real-time salary/gig payroll streaming on Bitcoin Cash, enforced by a CashScript covenant.",
+  "scripts": {
+    "compile": "cashc contracts/StreamPay.cash -o contracts/artifacts/StreamPay.json",
+    "test": "npm run compile && node --test contracts/test/streampay.test.js",
+    "deploy": "node scripts/deploy-stream.js",
+    "withdraw": "node scripts/withdraw.js",
+    "cancel": "node scripts/cancel.js",
+    "regtest:mine": "node scripts/mine-regtest-blocks.js"
+  },
+  "dependencies": {
+    "cashscript": "^0.13.2"
+  },
+  "devDependencies": {
+    "cashc": "^0.13.2"
+  }
+}

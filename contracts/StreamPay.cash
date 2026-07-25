@@ -1,0 +1,89 @@
+pragma cashscript ^0.13.0;
+/* 
+V2: vesting is defined by a start/end date range instead of a manually
+computed satoshis-per-second rate. unlocked = totalDeposit * elapsed / duration,
+linear between startTime and endTime. See changes.md for the full rationale.
+
+NOTE on integer math: CashScript ints are checked, bounded integers (BCH VM
+script numbers, effectively 64-bit signed after the 2022 arithmetic upgrade).
+totalDeposit * elapsed is computed BEFORE dividing by duration, which avoids
+truncating-to-zero on small elapsed fractions, but means the intermediate
+product must stay under ~9.22e18. For realistic hackathon-scale values
+(deposits up to a few thousand BCH, durations up to a few years in seconds)
+this is nowhere close to overflowing — but it's worth knowing if someone
+later plugs in extreme demo numbers (e.g. testing with elapsed in the
+billions of seconds AND a very large totalDeposit at the same time).
+*/
+
+contract StreamPay(
+    bytes20 employerPKH,
+    bytes20 workerPKH,
+    int startTime,       // unix timestamp, stream genesis (0% vested)
+    int endTime,          // unix timestamp, stream fully vested (100% vested)
+    int totalDeposit     // total satoshis funded into the stream at genesis
+) {
+    // Worker withdraws any amount up to what they've currently earned.
+    function withdraw(sig workerSig, pubkey workerPk, int amount) {
+        require(hash160(workerPk) == workerPKH);
+        require(checkSig(workerSig, workerPk));
+        require(amount > 0);
+        require(tx.locktime >= startTime);
+        require(endTime > startTime);
+
+        int minerFee = 1000;
+        int remainingBefore = tx.inputs[this.activeInputIndex].value;
+        int withdrawnSoFar = totalDeposit - remainingBefore;
+
+        int duration = endTime - startTime;
+        int elapsed = min(tx.locktime - startTime, duration);
+        int unlockedTotal = (totalDeposit * elapsed) / duration;
+
+        require(withdrawnSoFar + amount <= unlockedTotal);
+
+        bytes25 workerLock = new LockingBytecodeP2PKH(workerPKH);
+        int remainingAfter = remainingBefore - amount - minerFee;
+
+        if (remainingAfter > minerFee) {
+            // Stream continues: pay the worker, recreate the covenant with the rest
+            bytes selfLock = tx.inputs[this.activeInputIndex].lockingBytecode;
+            require(tx.outputs.length == 2);
+            require(tx.outputs[0].value == amount);
+            require(tx.outputs[0].lockingBytecode == workerLock);
+            require(tx.outputs[1].value == remainingAfter);
+            require(tx.outputs[1].lockingBytecode == selfLock);
+        } else {
+            // Final withdrawal: drain everything remaining to the worker
+            require(tx.outputs.length == 1);
+            require(tx.outputs[0].value == remainingBefore - minerFee);
+            require(tx.outputs[0].lockingBytecode == workerLock);
+        }
+    }
+
+    // Employer ends the stream early: worker is paid what they've earned so far,
+    // employer reclaims the unearned remainder. One transaction, no disputes.
+    function cancel(sig employerSig, pubkey employerPk) {
+        require(hash160(employerPk) == employerPKH);
+        require(checkSig(employerSig, employerPk));
+        require(tx.locktime >= startTime);
+        require(endTime > startTime);
+
+        int minerFee = 1000;
+        int remainingBefore = tx.inputs[this.activeInputIndex].value;
+        int withdrawnSoFar = totalDeposit - remainingBefore;
+
+        int duration = endTime - startTime;
+        int elapsed = min(tx.locktime - startTime, duration);
+        int unlockedTotal = (totalDeposit * elapsed) / duration;
+        int earnedNotWithdrawn = unlockedTotal - withdrawnSoFar;
+        int refundToEmployer = remainingBefore - earnedNotWithdrawn - minerFee;
+
+        bytes25 workerLock = new LockingBytecodeP2PKH(workerPKH);
+        bytes25 employerLock = new LockingBytecodeP2PKH(employerPKH);
+
+        require(tx.outputs.length == 2);
+        require(tx.outputs[0].value == earnedNotWithdrawn);
+        require(tx.outputs[0].lockingBytecode == workerLock);
+        require(tx.outputs[1].value == refundToEmployer);
+        require(tx.outputs[1].lockingBytecode == employerLock);
+    }
+}
