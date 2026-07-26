@@ -51,8 +51,21 @@ Note: JS numbers lose precision above 2^53; for real sat amounts prefer `BigInt`
 
 ## Not yet built
 
-- Real regtest BCH node setup + `scripts/mine-regtest-blocks.js` (the live-demo layer, separate from unit testing above)
-- `scripts/deploy-stream.js`, `withdraw.js`, `cancel.js` (CLI proof-of-flow against a real node)
-- Frontend (`TickingBalance.jsx`, dashboards) — now needs a date-range picker instead of a rate input
-- Dust-limit edge case tests
-- Day-by-day build schedule and demo script tailored to StreamPay
+- Frontend integration with the real deploy/withdraw/cancel scripts (currently the frontend is a self-contained visual simulation — see `frontend/`)
+- `docs/demo-script.md` and day-by-day build schedule tailored to StreamPay
+- Multi-stream support (`.streampay-state.json` currently tracks one stream at a time)
+
+## Regtest node + CLI scripts (verified against a real, live node)
+
+`scripts/` implements the brief's original Day-1 plan: prove `deploy → withdraw → cancel` from the command line against a real chain before touching any UI. This is now built and was actually run end-to-end against a live regtest Bitcoin Cash Node, not just written and assumed correct — see `docs/regtest-node-setup.md` for full details, including a real MTP (median-time-past) gotcha that surfaced while testing (locktime must be *strictly less than* MTP for mempool acceptance, and MTP itself lags behind wall-clock in a way that's directly observable on regtest, not just a mainnet theoretical).
+
+```bash
+./scripts/start-regtest-node.sh   # downloads BCHN if needed, starts it in regtest mode
+node scripts/deploy-stream.js 0.1 60
+node scripts/withdraw.js
+node scripts/cancel.js
+node scripts/mine-regtest-blocks.js 3   # run in a separate terminal during a live demo
+./scripts/stop-regtest-node.sh
+```
+
+Key design point: `scripts/lib/RegtestRpcProvider.js` implements cashscript's `NetworkProvider` interface directly against `bitcoind`'s JSON-RPC (via `scantxoutset`), rather than standing up a separate Electrum/Fulcrum indexer just to use `ElectrumNetworkProvider` — the interface turned out to be small enough (5 methods) that this was the simpler real solution, not a shortcut.

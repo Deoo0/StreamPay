@@ -31,7 +31,7 @@ contract StreamPay(
         require(endTime > startTime);
 
         int minerFee = 1000;
-        int remainingBefore = tx.inputs[this.activeInputIndex].value;
+        int remainingBefore = tx.inputs[this.activeInputIndex].value;//Current UTXOs in the contract 
         int withdrawnSoFar = totalDeposit - remainingBefore;
 
         int duration = endTime - startTime;
@@ -41,7 +41,7 @@ contract StreamPay(
         require(withdrawnSoFar + amount <= unlockedTotal);
 
         bytes25 workerLock = new LockingBytecodeP2PKH(workerPKH);
-        int remainingAfter = remainingBefore - amount - minerFee;
+        int remainingAfter = remainingBefore - amount - minerFee; //Calculate how much UTXO will be left after every transactions
 
         if (remainingAfter > minerFee) {
             // Stream continues: pay the worker, recreate the covenant with the rest
