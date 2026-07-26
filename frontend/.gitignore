@@ -22,3 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.bchn-regtest-data
+scripts/.streampay-state.json
