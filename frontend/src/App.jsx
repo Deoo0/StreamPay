@@ -1,15 +1,9 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
-import StreamPayDemo from './components/StreamPayDemo'
+import StreamPayDemo from './components/StreamPayDemo.jsx';
 
-function App() {
-  
-
-  return <StreamPayDemo/>
-
+export default function App() {
+  return (
+    <main className="app-shell">
+      <StreamPayDemo />
+    </main>
+  );
 }
-
-export default App
